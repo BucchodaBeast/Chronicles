@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE CHRONICLES — Civilisational Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-icon">&#x2726;</div>
+    <div class="brand-text">
+      <h1>THE CHRONICLES</h1>
+      <span class="brand-sub">Civilisational Intelligence System</span>
+    </div>
+  </div>
+  <div class="topbar-meta">
+    <div class="live-indicator">
+      <span class="pulse"></span>
+      <span class="live-text">LIVE</span>
+    </div>
+    <div class="weekly-stats" id="weekly-stats">
+      <span class="stat"><strong id="stat-dispatches">0</strong> dispatches (7d)</span>
+      <span class="stat"><strong id="stat-convergences">0</strong> convergences</span>
+      <span class="stat"><strong id="stat-briefs">0</strong> briefs</span>
+    </div>
+  </div>
+</header>
+
+<!-- AGENT STRIP -->
+<nav class="agent-strip" id="agent-strip">
+  <!-- Populated by JS -->
+</nav>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+
+  <!-- FEED -->
+  <main class="feed" id="feed">
+    <div class="feed-header">
+      <h2>The Archive</h2>
+      <div class="feed-filters">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="dispatch">Dispatches</button>
+        <button class="filter-btn" data-filter="convergence_alert">Convergences</button>
+        <button class="filter-btn" data-filter="brief">Briefs</button>
+      </div>
+    </div>
+    <div class="feed-content" id="feed-content">
+      <!-- Items injected here -->
+    </div>
+  </main>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <section class="sidebar-section">
+      <h3>Convergence Monitor</h3>
+      <div class="convergence-list" id="convergence-list">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3>Divergence Matrix</h3>
+      <div class="divergence-matrix" id="divergence-matrix">
+        <div class="matrix-pair">
+          <span class="agent-tag" style="background:#D4AF37">SOLOMON</span>
+          <span class="vs">vs</span>
+          <span class="agent-tag" style="background:#B22222">AMOS</span>
+        </div>
+        <div class="matrix-pair">
+          <span class="agent-tag" style="background:#8B0000">DANIEL</span>
+          <span class="vs">vs</span>
+          <span class="agent-tag" style="background:#4B0082">JOHN</span>
+        </div>
+        <div class="matrix-pair">
+          <span class="agent-tag" style="background:#708090">MARCUS</span>
+          <span class="vs">vs</span>
+          <span class="agent-tag" style="background:#6B4C3B">AUGUSTINE</span>
+        </div>
+        <div class="matrix-pair">
+          <span class="agent-tag" style="background:#E6A817">RUTH</span>
+          <span class="vs">vs</span>
+          <span class="agent-tag" style="background:#B22222">AMOS</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3>Latest Briefs</h3>
+      <div class="brief-previews" id="brief-previews">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <section class="sidebar-section">
+      <h3>System Status</h3>
+      <div class="system-status">
+        <div class="status-row">
+          <span class="status-label">Last Run</span>
+          <span class="status-value" id="last-run">--</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Agents Active</span>
+          <span class="status-value">8 / 8</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Council</span>
+          <span class="status-value" style="color:#00D8FF">STANDING</span>
+        </div>
+        <div class="status-row">
+          <span class="status-label">Oracle</span>
+          <span class="status-value" style="color:#C9A84C">AWAITING</span>
+        </div>
+      </div>
+    </section>
+  </aside>
+
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal-content" id="modal-content">
+    <button class="modal-close" id="modal-close">&times;</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let allItems = [];
+let agents = [];
+let currentFilter = 'all';
+let selectedAgent = null;
+
+// ============================================================
+// UTILS
+// ============================================================
+function formatDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function truncate(str, len) {
+  if (!str) return '';
+  return str.length > len ? str.slice(0, len) + '...' : str;
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function renderAgentStrip() {
+  const strip = document.getElementById('agent-strip');
+  strip.innerHTML = agents.map(a => `
+    <div class="agent-card ${selectedAgent === a.name ? 'active' : ''}" 
+         data-agent="${a.name}" 
+         style="--agent-color: ${a.color}">
+      <div class="agent-initial" style="background:${a.color}">${a.name[0]}</div>
+      <div class="agent-info">
+        <div class="agent-name">${a.name}</div>
+        <div class="agent-era">${a.era}</div>
+        <div class="agent-territory">${a.territory}</div>
+      </div>
+      <div class="agent-status">
+        <span class="status-dot" style="background:#00D8FF"></span>
+      </div>
+    </div>
+  `).join('');
+
+  strip.querySelectorAll('.agent-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const agent = card.dataset.agent;
+      selectedAgent = selectedAgent === agent ? null : agent;
+      renderAgentStrip();
+      applyFilter();
+    });
+  });
+}
+
+function renderFeed() {
+  const container = document.getElementById('feed-content');
+  let items = allItems;
+  if (currentFilter !== 'all') {
+    items = items.filter(i => i.type === currentFilter);
+  }
+  if (selectedAgent) {
+    items = items.filter(i => i.agent === selectedAgent || (i.mentions && i.mentions.includes(selectedAgent)));
+  }
+
+  if (items.length === 0) {
+    container.innerHTML = '<div class="empty-state">No dispatches in this view. The archive is building.</div>';
+    return;
+  }
+
+  container.innerHTML = items.map(item => {
+    const isConvergence = item.type === 'convergence_alert';
+    const isBrief = item.type === 'brief';
+    const agentColor = agents.find(a => a.name === item.agent)?.color || '#C9A84C';
+    const agentName = item.agent || 'SYSTEM';
+
+    if (isConvergence) {
+      return `
+        <article class="feed-item convergence-item" data-id="${item.id}">
+          <div class="item-header">
+            <div class="item-type-badge convergence-badge">CONVERGENCE</div>
+            <time>${formatDate(item.timestamp)}</time>
+          </div>
+          <h3 class="item-headline">${escapeHtml(item.headline)}</h3>
+          <div class="item-body">${escapeHtml(truncate(item.body, 400))}</div>
+          <div class="item-meta">
+            <div class="item-agents">
+              ${(item.mentions || []).map(m => `<span class="agent-pill" style="background:${agents.find(a=>a.name===m)?.color||'#666'}">${m}</span>`).join('')}
+            </div>
+            <div class="item-sil">SIL: ${(item.sil_score || 0).toFixed(2)}</div>
+          </div>
+        </article>
+      `;
+    }
+
+    if (isBrief) {
+      return `
+        <article class="feed-item brief-item" data-id="${item.id}">
+          <div class="item-header">
+            <div class="item-type-badge brief-badge">CHRONICLES BRIEF</div>
+            <time>${formatDate(item.created_at)}</time>
+          </div>
+          <h3 class="item-headline">${escapeHtml(item.headline)}</h3>
+          <div class="item-verdict">${escapeHtml(item.verdict || '')}</div>
+          <div class="brief-meta">
+            <span class="confidence-badge ${(item.confidence || 'LOW').toLowerCase()}">${item.confidence}</span>
+            <span class="timeline">${escapeHtml(item.timeline || '')}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    return `
+      <article class="feed-item dispatch-item" data-id="${item.id}" style="--item-color: ${agentColor}">
+        <div class="item-accent-bar" style="background:${agentColor}"></div>
+        <div class="item-header">
+          <div class="item-agent">
+            <span class="agent-dot" style="background:${agentColor}"></span>
+            <strong>${agentName}</strong>
+            <span class="item-era">${agents.find(a=>a.name===agentName)?.era || ''}</span>
+          </div>
+          <time>${formatDate(item.timestamp)}</time>
+        </div>
+        <h3 class="item-headline">${escapeHtml(item.headline)}</h3>
+        <div class="item-body">${escapeHtml(truncate(item.body, 350))}</div>
+        ${item.ancient_parallel ? `<div class="ancient-parallel"><span class="parallel-label">Parallel:</span> ${escapeHtml(item.ancient_parallel)}</div>` : ''}
+        <div class="item-meta">
+          <div class="item-tags">
+            ${(item.tags || []).map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+          </div>
+          <div class="item-sil">SIL: ${(item.sil_score || 0).toFixed(2)}</div>
+        </div>
+      </article>
+    `;
+  }).join('');
+
+  container.querySelectorAll('.feed-item').forEach(el => {
+    el.addEventListener('click', () => openModal(el.dataset.id));
+  });
+}
+
+function renderSidebar() {
+  // Convergence list
+  const convList = document.getElementById('convergence-list');
+  const convergences = allItems.filter(i => i.type === 'convergence_alert').slice(0, 5);
+  convList.innerHTML = convergences.length ? convergences.map(c => `
+    <div class="convergence-mini" data-id="${c.id}">
+      <div class="conv-title">${escapeHtml(truncate(c.headline, 60))}</div>
+      <div class="conv-agents">${(c.mentions || []).join(', ')}</div>
+    </div>
+  `).join('') : '<div class="empty-mini">No convergences yet</div>';
+
+  convList.querySelectorAll('.convergence-mini').forEach(el => {
+    el.addEventListener('click', () => openModal(el.dataset.id));
+  });
+
+  // Brief previews
+  const briefList = document.getElementById('brief-previews');
+  const briefs = allItems.filter(i => i.type === 'brief').slice(0, 3);
+  briefList.innerHTML = briefs.length ? briefs.map(b => `
+    <div class="brief-mini" data-id="${b.id}">
+      <div class="brief-mini-headline">${escapeHtml(truncate(b.headline, 70))}</div>
+      <div class="brief-mini-confidence ${(b.confidence || 'LOW').toLowerCase()}">${b.confidence}</div>
+    </div>
+  `).join('') : '<div class="empty-mini">Awaiting Oracle synthesis</div>';
+
+  briefList.querySelectorAll('.brief-mini').forEach(el => {
+    el.addEventListener('click', () => openModal(el.dataset.id));
+  });
+}
+
+function applyFilter() {
+  renderFeed();
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function openModal(id) {
+  const item = allItems.find(i => i.id === id);
+  if (!item) return;
+  const overlay = document.getElementById('modal-overlay');
+  const body = document.getElementById('modal-body');
+
+  let html = '';
+  if (item.type === 'convergence_alert') {
+    html = `
+      <div class="modal-type">CONVERGENCE ALERT</div>
+      <h2>${escapeHtml(item.headline)}</h2>
+      <div class="modal-body-text">${escapeHtml(item.body).replace(/\n/g, '<br>')}</div>
+      <div class="modal-meta">
+        <div>Agents: ${(item.mentions || []).join(', ')}</div>
+        <div>SIL Score: ${item.sil_score?.toFixed(2) || 'N/A'}</div>
+        <div>${formatDate(item.timestamp)}</div>
+      </div>
+    `;
+  } else if (item.type === 'brief') {
+    html = `
+      <div class="modal-type">CHRONICLES BRIEF</div>
+      <h2>${escapeHtml(item.headline)}</h2>
+      <div class="modal-verdict">${escapeHtml(item.verdict || '')}</div>
+      <div class="modal-section">
+        <h4>Ancient Parallel</h4>
+        <p>${escapeHtml(item.ancient_parallel || '')}</p>
+      </div>
+      <div class="modal-section">
+        <h4>Evidence</h4>
+        <ul>${(item.evidence || []).map(e => `<li>${escapeHtml(e)}</li>`).join('')}</ul>
+      </div>
+      <div class="modal-section">
+        <h4>Implications</h4>
+        <p>${escapeHtml(item.implications || '')}</p>
+      </div>
+      <div class="modal-section">
+        <h4>Whitespace</h4>
+        <p class="whitespace-text">${escapeHtml(item.whitespace || '')}</p>
+      </div>
+      <div class="modal-section">
+        <h4>Action Items</h4>
+        <ul>${(item.action_items || []).map(a => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
+      </div>
+      <div class="brief-meta">
+        <span class="confidence-badge ${(item.confidence || 'LOW').toLowerCase()}">${item.confidence}</span>
+        <span>${escapeHtml(item.timeline || '')}</span>
+      </div>
+    `;
+  } else {
+    const agent = agents.find(a => a.name === item.agent);
+    html = `
+      <div class="modal-type">DISPATCH</div>
+      <div class="modal-agent-header" style="--agent-color:${agent?.color||'#C9A84C'}">
+        <span class="agent-dot" style="background:${agent?.color||'#C9A84C'}"></span>
+        <strong>${item.agent}</strong>
+        <span class="modal-era">${agent?.era || ''}</span>
+      </div>
+      <h2>${escapeHtml(item.headline)}</h2>
+      <div class="modal-body-text">${escapeHtml(item.body).replace(/\n/g, '<br>')}</div>
+      ${item.ancient_parallel ? `<div class="modal-parallel"><strong>Parallel:</strong> ${escapeHtml(item.ancient_parallel)}</div>` : ''}
+      <div class="modal-meta">
+        <div>Tags: ${(item.tags || []).join(', ')}</div>
+        <div>SIL: ${item.sil_score?.toFixed(2) || 'N/A'} | ${item.confidence || 'N/A'}</div>
+        <div>${formatDate(item.timestamp)}</div>
+      </div>
+    `;
+  }
+
+  body.innerHTML = html;
+  overlay.classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+
+// ============================================================
+// DATA FETCHING
+// ============================================================
+async function loadAgents() {
+  try {
+    const res = await fetch('/api/agents');
+    agents = await res.json();
+    renderAgentStrip();
+  } catch (e) {
+    console.error('Failed to load agents:', e);
+  }
+}
+
+async function loadDispatches() {
+  try {
+    const res = await fetch('/api/dispatches?limit=100');
+    const dispatches = await res.json();
+    allItems = dispatches;
+    renderFeed();
+    renderSidebar();
+  } catch (e) {
+    console.error('Failed to load dispatches:', e);
+  }
+}
+
+async function loadBriefs() {
+  try {
+    const res = await fetch('/api/briefs?limit=20');
+    const briefs = await res.json();
+    // Merge briefs into allItems
+    allItems = [...allItems.filter(i => i.type !== 'brief'), ...briefs.map(b => ({...b, type: 'brief'}))];
+    // Sort by timestamp
+    allItems.sort((a, b) => new Date(b.timestamp || b.created_at) - new Date(a.timestamp || a.created_at));
+    renderFeed();
+    renderSidebar();
+  } catch (e) {
+    console.error('Failed to load briefs:', e);
+  }
+}
+
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    const stats = await res.json();
+    document.getElementById('stat-dispatches').textContent = stats.dispatches_7d || 0;
+    document.getElementById('stat-convergences').textContent = stats.convergences_7d || 0;
+    document.getElementById('stat-briefs').textContent = stats.briefs_7d || 0;
+    document.getElementById('last-run').textContent = formatDate(stats.last_run);
+  } catch (e) {
+    console.error('Failed to load stats:', e);
+  }
+}
+
+// ============================================================
+// EVENTS
+// ============================================================
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentFilter = btn.dataset.filter;
+    applyFilter();
+  });
+});
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// ============================================================
+// INIT
+// ============================================================
+async function init() {
+  await loadAgents();
+  await loadDispatches();
+  await loadBriefs();
+  await loadStats();
+
+  // Poll every 60s
+  setInterval(() => {
+    loadDispatches();
+    loadBriefs();
+    loadStats();
+  }, 60000);
+}
+
+init();
+</script>
+
+</body>
+</html>
